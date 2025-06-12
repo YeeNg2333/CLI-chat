@@ -66,6 +66,7 @@ def handle_client(conn, addr):
 
         with lock:
             if username in online_users:
+                username = None
                 send_to(conn, {'status': "FAIL"})
                 conn.close()
                 return
@@ -187,10 +188,12 @@ def handle_client(conn, addr):
         with lock:
             # if username in online_users:
             #     del online_users[username]
-            online_users.pop(username, None)
+            if username:
+                if username in online_users:
+                    online_users.pop(username, None)
+                    print(f"[-] {username} 离线")
+                    broadcast(f"[通知] {username} 离线", 'sys')
         conn.close()
-        print(f"[-] {username} 离线")
-        broadcast(f"[通知] {username} 离线",'sys')
 
 
 def main():
@@ -199,10 +202,18 @@ def main():
         port = int(input('输入监听端口：'))
     else:
         port = int(sys.argv[1])
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(('0.0.0.0', port))
-    server.listen(5)
-    print(f"[*] 服务端在端口 {port} 监听中...")
+    not_success = True
+    while not_success:
+        try:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.bind(('0.0.0.0', port))
+            server.listen(5)
+            print(f"[*] 服务端在端口 {port} 监听中...")
+            not_success = False
+        except socket.error as e:
+            print('出现异常，端口被占用: ',e)
+            writelogs('Error','出现异常，端口被占用: ' + str(e))
+            time.sleep(3)
 
     try:
         while True:

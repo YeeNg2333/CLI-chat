@@ -99,13 +99,13 @@ def main(is_first_boot, host = None, port = None):
                 # client.close()
                 # return
                 if response.get('status') == 'FAIL':
-                    print('重复的用户名，请重新输入。')
-                    break
+                    print('重复的用户名。')
+                    return
                     # username = input("请输入用户名: ")
                     # client.send(username.encode())
                 elif response.get('status') == 'EMPTY':
                     print('用户名为空！')
-                    break
+                    return
                     # username = input("请输入用户名: ")
                     # client.send(username.encode())
                 elif response.get('status') == 'KICK':
