@@ -91,7 +91,7 @@ def main(is_first_boot, host = None, port = None):
         # response = client.recv(1024).decode() # 隧道连接会卡住
         response:dict = receive_responses(client)
 
-        # print(response)
+        print(response)
 
         try:
             if response.get('status') != "SUCCESS":
@@ -113,6 +113,7 @@ def main(is_first_boot, host = None, port = None):
                     return
                 elif response.get('status') is None:
                     print('ERROR 状态位为空')
+                    return
                 else:
                     print(response)
                     raise Exception(response)
