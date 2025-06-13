@@ -28,6 +28,25 @@ class User:
         except Exception as e:
             print(e)
 
+    # 接收json格式的消息，遇到换行符结束
+    def receive_responses(self):
+        buffer = b''
+        while True:
+            # 尝试接收数据直到遇到换行符
+            chunk = self.conn.recv(1)
+            if not chunk:
+                break
+            buffer += chunk
+            if buffer.endswith(b'\n'):
+                break
+        # 去除换行符并解析
+        json_str = buffer[:-1].decode()
+        try:
+            print(json_str)
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # print('JSONDecodeError')
+            return {'status': 'JSONDecodeError'}
 
 # 对所有用户发广播，
 # 在这个分支里，这个要怎么解决？
@@ -127,36 +146,40 @@ def handle_client(user, username):
     broadcast(f"[通知] {username} 上线了")
     try:
         while True:
-            data = user.conn.recv(1024).decode().strip()
+            # data = user.conn.recv(1024).decode().strip()
+            data = user.receive_responses()
             if not data: break
 
 
             # 进入指令检索
-            if data.startswith("/"): # 切换聊天对象命令格式: /switch [target_username]
-                if data.startswith("/switch") or data.startswith("/sw "):
-                    parts = data.split()
-                    if len(parts) < 2:
-                        # send_to(conn, "ERROR 未指定用户")
-                        user.send_to({'whosend':'sys','msg': "ERROR 未指定用户"})
-                        continue
-
-                    target = parts[1]
-                    with lock:
-                        if target in online_users and target != username and online_users[target].anonymous == False:
-                            online_users[username].target = target
-                            # send_to(conn, f"已切换到 {target}")
-                            # conn.sendall(f"已切换到 {target}".encode())
-                            user.send_to({'whosend': 'sys', 'msg': f"已切换到 {target}", 'target': target})
-
-                        else:
-                            # conn.send("ERROR 用户不存在或无法选择自己".encode())
-                            user.send_to({'whosend': 'sys', 'msg': "ERROR 用户不存在或无法选择自己"})
-                elif data.startswith("/list") or data.startswith("/ls"): # 列出在线用户
+            if data.get('cmd'): # 切换聊天对象命令格式: /switch [target_username]
+                command = data.get('msg')
+                parts = command.split()
+                # if data.startswith("/switch") or data.startswith("/sw "):
+                def command_is(command_full:str,command_simp:str = None):
+                    if parts[0][1:] == command_full or parts[0][1:] == command_simp:
+                        return True
+                    else:
+                        return False
+                if command_is('switch','sw'):
+                    try:
+                        target = parts[1]
+                        with lock:
+                            if target in online_users and target != username and online_users[target].anonymous == False:
+                                online_users[username].target = target
+                                # send_to(conn, f"已切换到 {target}")
+                                user.send_to({'whosend': 'sys', 'msg': f"已切换到 {target}", 'target': target})
+                            else:
+                                # conn.send("ERROR 用户不存在或无法选择自己".encode())
+                                user.send_to({'whosend': 'sys', 'msg': "ERROR 用户不存在或无法选择自己"})
+                    except IndexError:
+                        if len(parts) < 2:
+                            user.send_to({'whosend': 'sys', 'msg': "ERROR 未指定用户"})
+                elif command_is('list','ls'): # 列出在线用户
                     get_list_users = '\n '.join(list_users())
                     # send_to(conn, {'whosend':username,'msg':f"在线用户：\n {get_list_users}")
-                    # conn.sendall(f"在线用户：\n {get_list_users}".encode())
                     user.send_to({'whosend': 'sys', 'msg': f"在线用户：\n {get_list_users}"})
-                elif data.startswith("/select") or data.startswith("/sl"): # 列出在线用户，并进入选择用户模式
+                elif command_is('select','sl'): # 列出在线用户，并进入选择用户模式
                     n = 1
                     # conn.send('在线用户：\n'.encode())
                     user.send_to({'whosend': 'sys', 'msg': '在线用户：\n'})
@@ -167,16 +190,15 @@ def handle_client(user, username):
                         n += 1
                     # conn.send('直接输入序号来选择用户'.encode())
                     user.send_to({'whosend': 'sys', 'msg': '直接输入序号来选择用户'})
-                    data = user.conn.recv(1024).decode().strip()
+                    data = user.receive_responses()
                     if not data: break
-                    parts = data.split()
-                    if len(parts) == 0 or parts[0].isdigit() == False:
+                    if data is None or data['msg'].isdigit() == False:
                         # conn.send("取消选择".encode())
                         user.send_to({'whosend': 'sys', 'msg': "取消选择"})
                         continue
                     # 通过输入数字来得到选择用户（不需要再打名字）
                     try:
-                        target_num = int(parts[0])
+                        target_num = int(data['msg'])
                         target = list_users()[target_num - 1]
                         with lock:
                             if target in online_users and target != username:
@@ -191,7 +213,7 @@ def handle_client(user, username):
                     except IndexError:
                         # conn.sendall('[错误] 选中序号不存在'.encode())
                         user.send_to({'whosend': 'sys', 'msg': '[错误] 选中序号不存在'})
-                elif data.startswith("/dive") or data.startswith("/dv"):
+                elif command_is('dive','dv'):
                     # conn.sendall('已经切换到潜水模式'.encode())
                     if online_users[username].anonymous:
                         online_users[username].anonymous = False
@@ -199,7 +221,7 @@ def handle_client(user, username):
                     elif not online_users[username].anonymous:
                         online_users[username].anonymous = True
                         user.send_to({'whosend': 'sys', 'msg': f'已开启潜水模式'})
-                elif data.startswith("/help"):
+                elif command_is('help'):
                     # conn.send('命令集：\nswitch(sw) [username]切换到指定用户\nlist(ls) 列出所有用户\nselect(sl) 列出用户，并提供按序号选择用户\ndive(dv) 潜水！！！'.encode())
                     user.send_to({'whosend': 'sys', 'msg': '命令集：\nswitch(sw) [username]切换到指定用户\nlist(ls) 列出所有用户\nselect(sl) 列出用户，并提供按序号选择用户\ndive(dv) 切换潜水开关'})
                 else:

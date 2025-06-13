@@ -5,7 +5,25 @@ import json
 
 current_target = None # 聊天发送对象
 
-def receive_messages(conn):
+class Client:
+    def __init__(self, conn:socket.socket, username:str):
+        self.conn = conn
+        self.username = username
+
+    def send_to(self, msg_dict:dict, is_command = False):
+        if type(msg_dict) is not dict:
+            raise TypeError('msg must be a dict')
+        msg_dict['cmd'] = is_command
+        msg_to_go = json.dumps(msg_dict)
+        try:
+            self.conn.sendall((msg_to_go + '\n').encode())
+        except Exception as e:
+            print(e)
+            return
+
+
+
+def receive_messages(conn:socket.socket):
     global current_target
     while True:
         try:
@@ -19,16 +37,19 @@ def receive_messages(conn):
             if 'target' in data.keys():
                 # current_target = data.split()[1] if len(data.split()) > 1 else None
                 current_target = data.get('target')
-            if data.get('whosend') == 'sys':
+            if data.get('whosend') == 'sys':# 判别是否为系统通知
                 if current_target:
                     print("\r " + data.get('msg') + '\n' + current_target + '> ', end="")
                 else:
                     print("\r " + data.get('msg') + '\n' + '> ', end="")
             else:
-                if current_target:
-                    print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg") + '\n' + current_target + '> ', end="")
-                else:
-                    print("\r " + data.get('msg') + '\n' + '> ', end="")
+                print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg"))
+                print_prompt()
+
+                # if current_target: # 若已经指定发送对象，则指定
+                #     print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg"))
+                # else:
+                #     print("\r " + data.get('msg'))
 
 
             # 获取提示符要显示的聊天对象
@@ -61,6 +82,14 @@ def receive_responses(conn):
         # print('JSONDecodeError')
         return {'status':'JSONDecodeError'}
 
+def print_prompt():
+    global current_target
+    #     if current_target is None:  # 不太好用
+    #     print(' ', end='')
+    # else:
+    #     print(current_target, end='')
+    print(current_target if current_target is not None else '', end='')
+    print("> ", end="")
 
 def main(is_first_boot, host = None, port = None):
 
@@ -95,9 +124,6 @@ def main(is_first_boot, host = None, port = None):
 
         try:
             if response.get('status') != "SUCCESS":
-                # print("用户名已存在，连接关闭")
-                # client.close()
-                # return
                 if response.get('status') == 'FAIL':
                     print('重复的用户名。')
                     return
@@ -108,9 +134,9 @@ def main(is_first_boot, host = None, port = None):
                     return
                     # username = input("请输入用户名: ")
                     # client.send(username.encode())
-                elif response.get('status') == 'KICK':
-                    print('错误次数过多，请稍后重试。')
-                    return
+                # elif response.get('status') == 'KICK':
+                #     print('错误次数过多，请稍后重试。')
+                #     return
                 elif response.get('status') is None:
                     print('ERROR 状态位为空')
                     return
@@ -130,13 +156,10 @@ def main(is_first_boot, host = None, port = None):
     recv_thread.start()
 
     global current_target
+    server_now = Client(client,username)
     try:
         while True:
-            if current_target is None: # 不太好用
-                print(' ',end='')
-            else:
-                print(current_target,end='')
-            print("> ", end="")
+            print_prompt()
             message = input().strip()
 
             if not message:
@@ -146,10 +169,12 @@ def main(is_first_boot, host = None, port = None):
             #     client.send(message.encode())
             #     current_target = message.split()[1] if len(message.split()) > 1 else None
 
-            if message == "/exit":
-                break
+            if message.startswith('/'): # 进入命令处理
+                server_now.send_to({'msg':message},True)
+
             else:
-                client.send(message.encode())
+                server_now.send_to({'msg': message})
+
     # except ConnectionResetError:
     #     print('='*30,'FATAL_ERROR 连接已重置。','='*30,sep='\n')
     #     if input('\t重连服务器？y/n').upper() == "Y":
