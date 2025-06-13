@@ -50,8 +50,8 @@ def group_chat(msg, member_list = None):
 def write_logs(log_type:str = 'Notype', log_msg:str = '什么都没有？！！'):
     if log_msg:
         nowtime = time.strftime("%Y-%m-%d_%H.%M.%S", time.localtime())
-        the_log_string = f'[{log_type}]' + f'{nowtime}: {log_msg}\n'
-        with open(f'./logs.txt', 'a') as log:
+        the_log_string = (f'[{log_type}]' + f'{nowtime}: {log_msg}\n')
+        with open(f'./logs.txt', 'a', encoding='utf-8') as log:
             print(the_log_string)
             log.write(the_log_string)
 
@@ -68,13 +68,12 @@ def list_users():
 
 def create_user(conn, addr):
     global online_users
-
     def send_to(self, msg: dict = None):
         if type(msg) is not dict:
             raise TypeError('msg must be a dict')
         msg_to_go = json.dumps(msg)
         try:
-            self.conn.sendall((msg_to_go + '\n').encode())
+            conn.sendall((msg_to_go + '\n').encode())
         except Exception as e:
             print(e)
 
@@ -86,7 +85,7 @@ def create_user(conn, addr):
             return
 
         with lock:
-            if username in online_users:
+            if username in online_users: # 检测到重复用户名，断开连接
                 username = None
                 send_to(conn, {'status': "FAIL"})
                 conn.close()
@@ -98,10 +97,10 @@ def create_user(conn, addr):
                     online_users[username] = user
                 except Exception as e:
                     print(e)
-
+        # 用户名检查没有问题
         print(f"[+] {username} 上线 ({addr[0]}:{addr[1]})")
-        broadcast(f"[通知] {username} 上线了")
         handle_client(user, username)
+
     except ConnectionResetError as e:
         print('连接已重置')
         write_logs(log_type='Error', log_msg=f'连接已重置: {str(e)}')
@@ -121,10 +120,11 @@ def create_user(conn, addr):
                     online_users.pop(username, None)
                     print(f"[-] {username} 离线")
                     broadcast(f"[通知] {username} 离线", 'sys')
-        user.conn.close()
+        conn.close()
 
 def handle_client(user, username):
 
+    broadcast(f"[通知] {username} 上线了")
     try:
         while True:
             data = user.conn.recv(1024).decode().strip()
@@ -266,7 +266,7 @@ def main():
     try:
         while True:
             conn, addr = server.accept()
-            thread = threading.Thread(target=handle_client, args=(conn, addr))
+            thread = threading.Thread(target=create_user, args=(conn, addr))
             thread.daemon = True
             thread.start()
     except KeyboardInterrupt:
