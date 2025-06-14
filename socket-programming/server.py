@@ -181,11 +181,11 @@ def handle_client(user, username):
                 elif command_is('select','sl'): # 列出在线用户，并进入选择用户模式
                     n = 1
                     # conn.send('在线用户：\n'.encode())
-                    user.send_to({'whosend': 'sys', 'msg': '在线用户：\n'})
+                    user.send_to({'whosend': 'sys', 'msg': '在线用户：'})
                     # ls_us = '\n '.join(list_users())
                     for i in list_users():
                         # conn.send(f'|({n}) - {list_users()[n-1]}\n'.encode())
-                        user.send_to({'whosend': 'sys', 'msg': f'|({n}) - {list_users()[n-1]}\n'})
+                        user.send_to({'whosend': 'sys', 'msg': f' ({n}) - {list_users()[n-1]}'})
                         n += 1
                     # conn.send('直接输入序号来选择用户'.encode())
                     user.send_to({'whosend': 'sys', 'msg': '直接输入序号来选择用户'})
