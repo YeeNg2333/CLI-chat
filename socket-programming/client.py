@@ -32,16 +32,15 @@ def receive_messages(conn:socket.socket):
             if not data or 'GOODBYE' in data.get('msg'):
                 assert 'GOODBYE' in data.get('msg'),'GOOD BYE'
                 break
-            # print("\r" + data + "\n> ", end="")
+            # print("\r" + data.get('msg') + "\n> ", end="")
+            # print(data)
             assert data.get('status') != 'JSONDecodeError','JSONDecodeError'
             if 'target' in data.keys():
                 # current_target = data.split()[1] if len(data.split()) > 1 else None
                 current_target = data.get('target')
             if data.get('whosend') == 'sys':# 判别是否为系统通知
-                if current_target:
-                    print("\r " + data.get('msg') + '\n' + current_target + '> ', end="")
-                else:
-                    print("\r " + data.get('msg') + '\n' + '> ', end="")
+                print("\r " + data.get('msg'))
+                print_prompt()
             else:
                 print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg"))
                 print_prompt()
