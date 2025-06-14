@@ -4,6 +4,7 @@ import sys
 import json
 
 current_target = None # 聊天发送对象
+thread_keep_running = True
 
 class Client:
     def __init__(self, conn:socket.socket, username:str):
@@ -22,8 +23,8 @@ class Client:
             return
 
 
-
-def receive_messages(conn:socket.socket):
+# 这是一个线程
+def receive_messages(conn:socket.socket,keep_running:bool = True):
     global current_target
     while True:
         try:
@@ -35,33 +36,26 @@ def receive_messages(conn:socket.socket):
             # print("\r" + data.get('msg') + "\n> ", end="")
             # print(data)
             assert data.get('status') != 'JSONDecodeError','JSONDecodeError'
-            if 'target' in data.keys():
+            if 'target' in data.keys():# 获取聊天对象
                 # current_target = data.split()[1] if len(data.split()) > 1 else None
                 current_target = data.get('target')
             if data.get('whosend') == 'sys':# 判别是否为系统通知
                 print("\r " + data.get('msg'))
-                print_prompt()
             else:
                 print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg"))
-                print_prompt()
-
-                # if current_target: # 若已经指定发送对象，则指定
-                #     print("\r " + '<' + data.get("whosend") + '>' + ' | ' + data.get("msg"))
-                # else:
-                #     print("\r " + data.get('msg'))
-
-
-            # 获取提示符要显示的聊天对象
+            print_prompt()
 
         except AssertionError as e:
             print(e)
             break
         except Exception as e:
-            print('发生错误：')
+            if keep_running: break
+            print('\r【警告】收到消息时发生错误：')
             print(e)
-            break
+            if input('是否继续？y/n :') == 'y': continue
+            else: break
         # finally:
-        #     break
+        #     print_prompt()
 # 接收json格式的消息，遇到换行符结束
 def receive_responses(conn):
     buffer = b''
@@ -83,15 +77,11 @@ def receive_responses(conn):
 
 def print_prompt():
     global current_target
-    #     if current_target is None:  # 不太好用
-    #     print(' ', end='')
-    # else:
-    #     print(current_target, end='')
-    print(current_target if current_target is not None else '', end='')
-    print("> ", end="")
+    print(current_target if current_target is not None else '', end= '')
+    print('> ', end= '',flush=True)
 
 def main(is_first_boot, host = None, port = None):
-
+    global thread_keep_running
     if is_first_boot: # 判断是否为递归调用
         if len(sys.argv) != 3:
             print("可选传入参数的用法: python client.py <服务器IP> <端口>")
@@ -150,7 +140,8 @@ def main(is_first_boot, host = None, port = None):
     print(f"\f {username}，Ciallo～(∠・ω< )⌒★\t (输入/help查看命令大全)")
 
     # 启动接收消息线程
-    recv_thread = threading.Thread(target=receive_messages, args=(client,))
+
+    recv_thread = threading.Thread(target=receive_messages, args=(client,thread_keep_running,))
     recv_thread.daemon = False
     recv_thread.start()
 
@@ -169,6 +160,8 @@ def main(is_first_boot, host = None, port = None):
             #     current_target = message.split()[1] if len(message.split()) > 1 else None
 
             if message.startswith('/'): # 进入命令处理
+                if message.startswith('/exit'):
+                    exit(0)
                 server_now.send_to({'msg':message},True)
 
             else:
@@ -188,8 +181,10 @@ def main(is_first_boot, host = None, port = None):
     #     if input('\t重连服务器？y/n').upper() == "Y":
     #         main(False,host,port)
     finally:
+        thread_keep_running = False
         client.close()
         print("[-] 已断开连接")
+        exit()
 
 
 if __name__ == "__main__":
