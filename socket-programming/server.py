@@ -41,10 +41,10 @@ class User:
 
         json_str = buffer[:-1].decode()# 去除换行符并解析
         try:
-            print(json_str)
             return json.loads(json_str)
         except json.JSONDecodeError:
             # print('JSONDecodeError')
+            write_logs('Error','接收信息时出现JSON解码错误')
             return {'status': 'JSONDecodeError'}
 
 # 对所有用户发广播，
@@ -87,16 +87,21 @@ def list_users():
 def create_user(conn, addr):
     global online_users
     def send_to(msg: dict = None):
-        if type(msg) is not dict:
-            raise TypeError('msg must be a dict')
-        msg_to_go = json.dumps(msg)
         try:
-            conn.sendall((msg_to_go + '\n').encode())
+            conn.sendall((json.dumps(msg) + '\n').encode())
         except Exception as e:
             print(e)
 
     try:
-        username = conn.recv(1024).decode().strip() #建立连接后，客户端询问用户名
+        received_msg = conn.recv(1024).decode().strip()
+        parts = received_msg.split()
+        mode = 'normal' # 登录模式
+        try:
+            mode = parts[1]
+        except IndexError:
+            pass
+        username = parts[0] #建立连接后，客户端询问用户名
+
         if not username: #用户名为空的解决办法
             send_to({'status': 'ERROR'})
             conn.close()
@@ -113,6 +118,8 @@ def create_user(conn, addr):
                     send_to({'status': "SUCCESS"})
                     user = User(username, conn)
                     online_users[username] = user
+                    if mode == '#':
+                        user.anonymous = True
                 except Exception as e:
                     print(e)
         # 用户名检查没有问题
@@ -141,8 +148,9 @@ def create_user(conn, addr):
         conn.close()
 
 def handle_client(user, username):
-
-    broadcast(f"[通知] {username} 上线了")
+    if not user.anonymous:
+        broadcast(f"[通知] {username} 上线了")
+    user.send_to({'whosend' : 'sys', 'msg' : f"\f {username}，Ciallo～(∠・ω< )⌒★\t (输入/help查看命令大全)"})
     try:
         while True:
             # data = user.conn.recv(1024).decode().strip()
@@ -165,19 +173,23 @@ def handle_client(user, username):
                         target = parts[1]
                         with lock:
                             if target in online_users and target != username and online_users[target].anonymous == False:
-                                online_users[username].target = target
+                                user.target = target
                                 # send_to(conn, f"已切换到 {target}")
                                 user.send_to({'whosend': 'sys', 'msg': f"已切换到 {target}", 'target': target})
                             else:
                                 # conn.send("ERROR 用户不存在或无法选择自己".encode())
-                                user.send_to({'whosend': 'sys', 'msg': "ERROR 用户不存在或无法选择自己"})
+                                if target == username:
+                                    user.send_to({'whosend': 'sys', 'msg': "[错误] 无法选择自己"})
+                                user.send_to({'whosend': 'sys', 'msg': "[错误] 用户不存在"})
                     except IndexError:
                         if len(parts) < 2:
-                            user.send_to({'whosend': 'sys', 'msg': "ERROR 未指定用户"})
+                            user.send_to({'whosend': 'sys', 'msg': "用法：/sw [用户名称]"})
+
                 elif command_is('list','ls'): # 列出在线用户
                     get_list_users = '\n '.join(list_users())
                     # send_to(conn, {'whosend':username,'msg':f"在线用户：\n {get_list_users}")
                     user.send_to({'whosend': 'sys', 'msg': f"在线用户：\n {get_list_users}"})
+
                 elif command_is('select','sl'): # 列出在线用户，并进入选择用户模式
                     n = 1
                     # conn.send('在线用户：\n'.encode())
@@ -207,11 +219,12 @@ def handle_client(user, username):
                             else:
                                 # conn.sendall("ERROR 用户不存在或无法选择自己 ".encode())
                                 # conn.sendall("取消选择".encode())
-                                user.send_to({'whosend': 'sys', 'msg': "ERROR 用户不存在或无法选择自己\n已取消选择"})
+                                user.send_to({'whosend': 'sys', 'msg': "ERROR 或无法选择自己\n已取消选择"})
 
                     except IndexError:
                         # conn.sendall('[错误] 选中序号不存在'.encode())
                         user.send_to({'whosend': 'sys', 'msg': '[错误] 选中序号不存在'})
+
                 elif command_is('dive','dv'):
                     # conn.sendall('已经切换到潜水模式'.encode())
                     if online_users[username].anonymous:
@@ -220,6 +233,10 @@ def handle_client(user, username):
                     elif not online_users[username].anonymous:
                         online_users[username].anonymous = True
                         user.send_to({'whosend': 'sys', 'msg': f'已开启潜水模式'})
+
+                elif command_is('exit'):
+                    raise ConnectionResetError('exit')
+
                 elif command_is('help'):
                     # conn.send('命令集：\nswitch(sw) [username]切换到指定用户\nlist(ls) 列出所有用户\nselect(sl) 列出用户，并提供按序号选择用户\ndive(dv) 潜水！！！'.encode())
                     user.send_to({'whosend': 'sys', 'msg': '命令集：\nswitch(sw) [username]切换到指定用户\nlist(ls) 列出所有用户\nselect(sl) 列出用户，并提供按序号选择用户\ndive(dv) 切换潜水开关'})
@@ -237,12 +254,15 @@ def handle_client(user, username):
                         user.send_to({'whosend': 'sys', 'msg': f"[错误] {user.target}已离线"})
             else:
                 # conn.send("[错误] 未选择聊天对象".encode())
-                user.send_to({'whosend': 'sys', 'msg': "[错误] 未选择聊天对象"})
+                user.send_to({'whosend': 'sys', 'msg': "[错误] 未选择聊天对象，使用/sw或/sl来选择聊天对象"})
     # 在这个块里，还需要吗？
     except ConnectionResetError as e:
-        print('连接已重置')
-        write_logs(log_type='Error', log_msg=f'连接已重置: {str(e)}')
-        pass
+        if str(e) == 'exit':
+            pass
+        else:
+            print('连接已重置')
+            write_logs(log_type='Error', log_msg=f'连接已重置: {str(e)}')
+            pass
     except Exception as e:
         print(e)
         # conn.sendall(str(e).encode())
