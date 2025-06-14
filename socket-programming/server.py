@@ -31,16 +31,15 @@ class User:
     # 接收json格式的消息，遇到换行符结束
     def receive_responses(self):
         buffer = b''
-        while True:
-            # 尝试接收数据直到遇到换行符
+        while True: # 尝试接收数据直到遇到换行符
             chunk = self.conn.recv(1)
             if not chunk:
                 break
             buffer += chunk
             if buffer.endswith(b'\n'):
                 break
-        # 去除换行符并解析
-        json_str = buffer[:-1].decode()
+
+        json_str = buffer[:-1].decode()# 去除换行符并解析
         try:
             print(json_str)
             return json.loads(json_str)
@@ -87,7 +86,7 @@ def list_users():
 
 def create_user(conn, addr):
     global online_users
-    def send_to(self, msg: dict = None):
+    def send_to(msg: dict = None):
         if type(msg) is not dict:
             raise TypeError('msg must be a dict')
         msg_to_go = json.dumps(msg)
@@ -99,19 +98,19 @@ def create_user(conn, addr):
     try:
         username = conn.recv(1024).decode().strip() #建立连接后，客户端询问用户名
         if not username: #用户名为空的解决办法
-            send_to(conn, {'status': 'ERROR'})
+            send_to({'status': 'ERROR'})
             conn.close()
             return
 
         with lock:
             if username in online_users: # 检测到重复用户名，断开连接
                 username = None
-                send_to(conn, {'status': "FAIL"})
+                send_to({'status': "FAIL"})
                 conn.close()
                 return
             else:
                 try:
-                    send_to(conn, {'status': "SUCCESS"})
+                    send_to({'status': "SUCCESS"})
                     user = User(username, conn)
                     online_users[username] = user
                 except Exception as e:
@@ -127,7 +126,7 @@ def create_user(conn, addr):
     except Exception as e:
         print(e)
         # conn.sendall(str(e).encode())
-        user.send_to({'whosend': 'sys', 'msg': str(e)})
+        send_to()
         write_logs(log_type='Error', log_msg=f'发生错误{str(e)}\n')
 
     finally:
@@ -232,8 +231,7 @@ def handle_client(user, username):
                 with lock:
                     if user.target in online_users:
                         receiver = online_users[user.target] # receiver即目的地用户对象
-                        # receiver.conn.send(f"[消息] <{username}> | {data}".encode())
-                        user.send_to(receiver.conn, {'whosend': username, 'msg': data})
+                        receiver.send_to({'whosend': username, 'msg': data.get('msg')})
                     else:
                         # conn.send(f"[错误] {user.target}已离线".encode())
                         user.send_to({'whosend': 'sys', 'msg': f"[错误] {user.target}已离线"})
@@ -253,8 +251,6 @@ def handle_client(user, username):
 
     finally:
         with lock:
-            # if username in online_users:
-            #     del online_users[username]
             if username:
                 if username in online_users:
                     online_users.pop(username, None)
