@@ -147,7 +147,7 @@ def create_user(conn, addr):
                     broadcast(f"[通知] {username} 离线", 'sys')
         conn.close()
 
-def handle_client(user, username):
+def handle_client(user:User, username:str):
     if not user.anonymous:
         broadcast(f"[通知] {username} 上线了")
     user.send_to({'whosend' : 'sys', 'msg' : f"\f {username}，Ciallo～(∠・ω< )⌒★\t (输入/help查看命令大全)"})
@@ -219,7 +219,7 @@ def handle_client(user, username):
                             else:
                                 # conn.sendall("ERROR 用户不存在或无法选择自己 ".encode())
                                 # conn.sendall("取消选择".encode())
-                                user.send_to({'whosend': 'sys', 'msg': "ERROR 或无法选择自己\n已取消选择"})
+                                user.send_to({'whosend': 'sys', 'msg': "ERROR 无法选择自己\n已取消选择"})
 
                     except IndexError:
                         # conn.sendall('[错误] 选中序号不存在'.encode())
