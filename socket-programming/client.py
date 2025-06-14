@@ -2,6 +2,7 @@ import socket
 import threading
 import sys
 import json
+import time
 
 current_target = None # 聊天发送对象
 thread_keep_running = True
@@ -30,8 +31,8 @@ def receive_messages(conn:socket.socket,keep_running:bool = True):
         try:
             # data = conn.recv(1024).decode()
             data = receive_responses(conn)
-            if not data or 'GOODBYE' in data.get('msg'):
-                assert 'GOODBYE' in data.get('msg'),'GOOD BYE'
+            if not data or data.get('msg') == 'GOODBYE':
+                assert 'GOODBYE' in data.get('msg'),'GOODBYE'
                 break
             # print("\r" + data.get('msg') + "\n> ", end="")
             # print(data)
@@ -46,10 +47,11 @@ def receive_messages(conn:socket.socket,keep_running:bool = True):
             print_prompt()
 
         except AssertionError as e:
-            print(e)
+            if not keep_running: break
+            else: print(e)
             break
         except Exception as e:
-            if keep_running: break
+            if not keep_running: break
             print('\r【警告】收到消息时发生错误：')
             print(e)
             if input('是否继续？y/n :') == 'y': continue
@@ -137,7 +139,7 @@ def main(is_first_boot, host = None, port = None):
         except Exception as e:
             print(e)
 
-    print(f"\f {username}，Ciallo～(∠・ω< )⌒★\t (输入/help查看命令大全)")
+    print('[√] 认证通过')
 
     # 启动接收消息线程
 
@@ -161,6 +163,7 @@ def main(is_first_boot, host = None, port = None):
 
             if message.startswith('/'): # 进入命令处理
                 if message.startswith('/exit'):
+                    server_now.send_to({'msg':message},True)
                     exit(0)
                 server_now.send_to({'msg':message},True)
 
@@ -172,7 +175,8 @@ def main(is_first_boot, host = None, port = None):
     #     if input('\t重连服务器？y/n').upper() == "Y":
     #         main(False,host,port)
     except KeyboardInterrupt:
-        print('GOOD BYE!')
+        print('GOODBYE!')
+        server_now.send_to({'msg': '/exit'}, True)
     # except Exception as e:
     #     print('='*30,'FATAL_ERROR 未知错误\n ',e,'='*30,sep='\n')
     #     if ISFIRSTBOOT is False:
@@ -182,6 +186,7 @@ def main(is_first_boot, host = None, port = None):
     #         main(False,host,port)
     finally:
         thread_keep_running = False
+        time.sleep(1)
         client.close()
         print("[-] 已断开连接")
         exit()
